@@ -6,11 +6,9 @@ import morgan from 'morgan';
 import { env } from './config/env';
 import { errorMiddleware } from './middlewares/error.middleware';
 import { notFoundHandler } from './middlewares/not-found.middleware';
-import { adminRouter } from './routes/admin.route';
 import { authRouter } from './routes/auth.route';
-import { chatRouter } from './routes/chat.route';
-import { noteRouter } from './routes/note.route';
-import { profileRouter } from './routes/profile.route';
+import { adminRouter } from './routes/admin.route';
+import { teamRouter } from './routes/team.route';
 
 export const app = express();
 
@@ -19,7 +17,7 @@ const isTest = env.nodeEnv === 'test';
 if (env.trustProxy > 0) app.set('trust proxy', env.trustProxy);
 
 app.use(helmet());
-app.use(cors({ origin: env.clientUrl }));
+app.use(cors({ origin: env.clientUrl, credentials: true }));
 app.use(express.json());
 if (!isTest) app.use(morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 300, skip: () => isTest }));
@@ -41,9 +39,7 @@ app.get('/', (_req, res) => {
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authLimiter, authRouter);
-app.use('/api/profile', profileRouter);
-app.use('/api/chat', chatRouter);
+app.use('/api/teams', teamRouter);
 app.use('/api/admin', adminRouter);
-app.use('/api/notes', noteRouter);
 app.use(notFoundHandler);
 app.use(errorMiddleware);

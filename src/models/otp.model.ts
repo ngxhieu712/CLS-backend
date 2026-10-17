@@ -1,5 +1,6 @@
 import mongoose, { Schema, Model } from 'mongoose';
 import crypto from 'crypto';
+import { env } from '../config/env';
 
 export const OTP_PURPOSES = ['register', 'resetPassword'] as const;
 export type OtpPurpose = (typeof OTP_PURPOSES)[number];
@@ -46,8 +47,7 @@ export interface OtpModelStatics extends Model<OtpDocument> {
 
 // Băm mã (HMAC với khóa bí mật OTP_SECRET trong .env, gắn với email để mã không dùng chéo)
 function hashOtpCode(email: string, code: string): string {
-    const secret = process.env.OTP_SECRET || 'dev-only-secret';
-    return crypto.createHmac('sha256', secret).update(`${email.toLowerCase()}:${code}`).digest('hex');
+    return crypto.createHmac('sha256', env.otpSecret).update(`${email.toLowerCase()}:${code}`).digest('hex');
 }
 
 const otpSchema = new Schema<OtpDocument, OtpModelStatics>({

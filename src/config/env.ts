@@ -16,6 +16,8 @@ const envSchema = z
     MONGO_URI: z.string().min(1, 'MONGO_URI is required'),
     JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),
     JWT_EXPIRES_IN: z.string().default('1d'),
+    OTP_SECRET: z.string().min(16).default('development-only-otp-secret-change-me'),
+    COOKIE_SECURE: z.string().optional().transform((value) => value === 'true'),
     CLIENT_URL: z.string().default('http://localhost:5173'),
     // Number of reverse proxies in front of the app (Render, Railway, Nginx: usually 1).
     // Needed so rate limits see the real client IP instead of the proxy's.
@@ -63,6 +65,8 @@ export const parseEnv = (raw: RawEnv) => {
     mongoUri: v.MONGO_URI,
     jwtSecret: v.JWT_SECRET,
     jwtExpiresIn: v.JWT_EXPIRES_IN,
+    otpSecret: v.OTP_SECRET,
+    cookieSecure: v.COOKIE_SECURE,
     clientUrl: v.CLIENT_URL,
     trustProxy: v.TRUST_PROXY,
     smtpHost: v.SMTP_HOST,
