@@ -4,7 +4,7 @@ export const REFEREE_ROLES = ['main', 'assistant'] as const;
 export type RefereeRole = (typeof REFEREE_ROLES)[number];
 
 // Bảng Phân_công_trọng_tài (quan hệ N:M giữa Trọng tài và Trận, khóa ghép: match + referee)
-export interface IMatchReferee {
+export interface MatchRefereeDocument extends mongoose.Document {
     referee: Types.ObjectId;           // Mã_trọng_tài
     match: Types.ObjectId;             // Mã_trận
     role: RefereeRole;                 // Vai_trò_trong_trận
@@ -12,7 +12,7 @@ export interface IMatchReferee {
     updatedAt?: Date;
 }
 
-const matchRefereeSchema = new Schema<IMatchReferee>({
+const matchRefereeSchema = new Schema<MatchRefereeDocument>({
     referee: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     match: { type: Schema.Types.ObjectId, ref: 'Match', required: true },
     role: { type: String, enum: [...REFEREE_ROLES], default: 'assistant' },
@@ -25,6 +25,4 @@ matchRefereeSchema.index({ match: 1 }, { unique: true, partialFilterExpression: 
 // Tra "trọng tài này phụ trách trận nào"
 matchRefereeSchema.index({ referee: 1 });
 
-const MatchReferee = mongoose.model<IMatchReferee>('MatchReferee', matchRefereeSchema);
-
-export default MatchReferee;
+export const MatchRefereeModel = mongoose.model<MatchRefereeDocument>('MatchReferee', matchRefereeSchema);

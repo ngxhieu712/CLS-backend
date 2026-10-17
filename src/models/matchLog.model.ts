@@ -2,7 +2,7 @@ import mongoose, { Schema, Types } from 'mongoose';
 
 // Bảng Nhật_ký (cha). Hai loại con dùng discriminator, chung 1 collection:
 //   resultSubmission.model.ts (Gửi_kết_quả), resultReview.model.ts (Duyệt_kết_quả)
-export interface IMatchLog {
+export interface MatchLogDocument extends mongoose.Document {
     occurredAt: Date;                  // Thời_điểm
     match: Types.ObjectId;             // Mã_trận
     kind?: 'ResultSubmission' | 'ResultReview'; // trường phân loại do Mongoose tự gán
@@ -10,13 +10,11 @@ export interface IMatchLog {
     updatedAt?: Date;
 }
 
-const matchLogSchema = new Schema<IMatchLog>({
+const matchLogSchema = new Schema<MatchLogDocument>({
     occurredAt: { type: Date, default: Date.now },
     match: { type: Schema.Types.ObjectId, ref: 'Match', required: true },
 }, { timestamps: true, discriminatorKey: 'kind', collection: 'MatchLog' });
 
 matchLogSchema.index({ match: 1, occurredAt: -1 });
 
-const MatchLog = mongoose.model<IMatchLog>('MatchLog', matchLogSchema);
-
-export default MatchLog;
+export const MatchLogModel = mongoose.model<MatchLogDocument>('MatchLog', matchLogSchema);

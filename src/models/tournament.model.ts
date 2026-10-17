@@ -4,7 +4,7 @@ export const TOURNAMENT_STATUSES = ['draft', 'registration', 'groupStage', 'play
 export type TournamentStatus = (typeof TOURNAMENT_STATUSES)[number];
 
 // Bảng Giải_đấu
-export interface ITournament {
+export interface TournamentDocument extends mongoose.Document {
     name: string;                      // Tên_giải
     description: string;               // Mô_tả
     banner: string;                    // Logo_banner (URL ảnh)
@@ -18,7 +18,7 @@ export interface ITournament {
     updatedAt?: Date;
 }
 
-const tournamentSchema = new Schema<ITournament>({
+const tournamentSchema = new Schema<TournamentDocument>({
     name: { type: String, required: true, trim: true },
     description: { type: String, default: '' },
     banner: { type: String, default: '' },
@@ -31,6 +31,4 @@ const tournamentSchema = new Schema<ITournament>({
     // Bỏ Mã_tài_khoản: web hiện chỉ phục vụ 1 giải, sẽ thêm khi mở rộng nhiều giải
 }, { timestamps: true, collection: 'Tournament' });
 
-const Tournament = mongoose.model<ITournament>('Tournament', tournamentSchema);
-
-export default Tournament;
+export const TournamentModel = mongoose.model<TournamentDocument>('Tournament', tournamentSchema);

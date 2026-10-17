@@ -4,7 +4,7 @@ export const TEAM_PROFILE_STATUSES = ['pending', 'approved', 'rejected'] as cons
 export type TeamProfileStatus = (typeof TEAM_PROFILE_STATUSES)[number];
 
 // Bảng Đội
-export interface ITeam {
+export interface TeamDocument extends mongoose.Document {
     name: string;                      // Tên_đội
     tag: string;                       // Tag
     logo: string;                      // Logo (URL)
@@ -22,7 +22,7 @@ export interface ITeam {
     updatedAt?: Date;
 }
 
-const teamSchema = new Schema<ITeam>({
+const teamSchema = new Schema<TeamDocument>({
     name: { type: String, required: true, trim: true },
     tag: { type: String, required: true, trim: true },
     logo: { type: String, default: '' },
@@ -43,6 +43,4 @@ teamSchema.index({ manager: 1 }, { unique: true });
 teamSchema.index({ tournament: 1, name: 1 }, { unique: true });
 teamSchema.index({ tournament: 1, tag: 1 }, { unique: true });
 
-const Team = mongoose.model<ITeam>('Team', teamSchema);
-
-export default Team;
+export const TeamModel = mongoose.model<TeamDocument>('Team', teamSchema);

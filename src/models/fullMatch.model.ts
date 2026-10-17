@@ -1,13 +1,13 @@
 import { Schema } from 'mongoose';
-import Recording, { IRecording } from './recording.model.js';
+import { RecordingModel, type RecordingDocument } from './recording.model';
 
 // Bảng Full_trận (con của Bản_ghi), video full up YouTube rồi dán link
-export interface IFullMatch extends IRecording {
+export interface FullMatchDocument extends RecordingDocument {
     youtubeLink: string;               // Link_YouTube
     youtubeVideoId?: string;           // Mã_video_YouTube (tự tách từ link)
 }
 
-const fullMatchSchema = new Schema<IFullMatch>({
+const fullMatchSchema = new Schema<FullMatchDocument>({
     youtubeLink: { type: String, required: true, trim: true },
     youtubeVideoId: { type: String },
 });
@@ -24,6 +24,4 @@ fullMatchSchema.pre('validate', function () {
     }
 });
 
-const FullMatch = Recording.discriminator<IFullMatch>('FullMatch', fullMatchSchema);
-
-export default FullMatch;
+export const FullMatchModel = RecordingModel.discriminator<FullMatchDocument>('FullMatch', fullMatchSchema);

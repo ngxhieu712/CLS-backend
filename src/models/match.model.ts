@@ -11,7 +11,7 @@ export type MatchEndType = (typeof MATCH_END_TYPES)[number];
 export type MatchSlot = 'A' | 'B';
 
 // Bảng Trận_đấu
-export interface IMatch {
+export interface MatchDocument extends mongoose.Document {
     scheduledAt?: Date;                // Giờ_thi_đấu
     status: MatchStatus;               // Trạng_thái_trận
     endType: MatchEndType;             // Hình_thức_kết_thúc
@@ -29,7 +29,7 @@ export interface IMatch {
     updatedAt?: Date;
 }
 
-const matchSchema = new Schema<IMatch>({
+const matchSchema = new Schema<MatchDocument>({
     scheduledAt: { type: Date },
     status: { type: String, enum: [...MATCH_STATUSES], default: 'scheduled' },
     endType: { type: String, enum: [...MATCH_END_TYPES], default: 'normal' },
@@ -46,15 +46,12 @@ const matchSchema = new Schema<IMatch>({
 }, { timestamps: true, collection: 'Match' });
 
 // Ràng buộc trong phạm vi 1 document (kiểm tra chéo collection để ở tầng service)
-const sameId = (a: Types.ObjectId | null | undefined, b: Types.ObjectId | null | undefined): boolean =>
-    !!a && !!b && a.equals(b);
-
 matchSchema.pre('validate', function () {
     const { teamA, teamB, winner } = this;
-    if (sameId(teamA, teamB)) {
+    if (teamA && teamB && teamA.equals(teamB)) {
         this.invalidate('teamB', 'Đội A và đội B phải khác nhau');
     }
-    if (winner && !sameId(winner, teamA) && !sameId(winner, teamB)) {
+    if (winner && !winner.equals(teamA) && !winner.equals(teamB)) {
         this.invalidate('winner', 'Đội thắng phải là đội A hoặc đội B');
     }
     if (this.status === 'confirmed' && !winner) {
@@ -69,6 +66,4 @@ matchSchema.index({ round: 1, scheduledAt: 1 });
 matchSchema.index({ teamA: 1 });
 matchSchema.index({ teamB: 1 });
 
-const Match = mongoose.model<IMatch>('Match', matchSchema);
-
-export default Match;
+export const MatchModel = mongoose.model<MatchDocument>('Match', matchSchema);

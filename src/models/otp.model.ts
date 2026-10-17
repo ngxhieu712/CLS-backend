@@ -8,8 +8,11 @@ export const OTP_TTL_MS = 5 * 60 * 1000;      // hết hạn sau 5 phút
 export const OTP_RESEND_MS = 60 * 1000;       // gửi lại cách nhau tối thiểu 60 giây
 export const OTP_MAX_ATTEMPTS = 5;            // sai tối đa 5 lần
 
+/** Trường không bao giờ được rời server. Bị loại khỏi mọi phản hồi JSON. */
+export const PRIVATE_OTP_FIELDS = ['codeHash', 'passwordHash', '__v'] as const;
+
 // Thông tin đội nộp cùng lúc đăng ký; sau khi OTP đúng sẽ tạo Team ở trạng thái chờ duyệt
-export interface IOtpTeamInfo {
+export interface OtpTeamInfo {
     name?: string;
     tag?: string;
     logo?: string;
@@ -21,25 +24,22 @@ export interface IOtpTeamInfo {
 
 // Mã OTP gửi qua Gmail, dùng cho đăng ký (xác thực email) và quên mật khẩu.
 // Mỗi (email, purpose) chỉ có 1 bản ghi: gửi mã mới thì ghi đè, mã cũ mất hiệu lực.
-export interface IOtp {
+export interface OtpDocument extends mongoose.Document {
     email: string;
     purpose: OtpPurpose;
     codeHash: string;                  // mã OTP đã băm, không lưu chữ thường
     fullName?: string;                 // dữ liệu đăng ký tạm (purpose = 'register')
     passwordHash?: string;             // mật khẩu đã băm bcrypt
-    teamInfo?: IOtpTeamInfo;
+    teamInfo?: OtpTeamInfo;
     attempts: number;                  // số lần nhập sai (service hủy mã khi >= OTP_MAX_ATTEMPTS)
     lastSentAt: Date;                  // để chặn gửi lại trong 60 giây
     expiresAt: Date;                   // MongoDB tự xóa khi hết hạn (TTL index)
+    matches(code: string): boolean;    // so khớp mã người dùng nhập với codeHash
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-export interface IOtpMethods {
-    matches(code: string): boolean;
-}
-
-export interface OtpModel extends Model<IOtp, {}, IOtpMethods> {
+export interface OtpModelStatics extends Model<OtpDocument> {
     generateCode(): string;
     hashCode(email: string, code: string): string;
 }
@@ -50,7 +50,7 @@ function hashOtpCode(email: string, code: string): string {
     return crypto.createHmac('sha256', secret).update(`${email.toLowerCase()}:${code}`).digest('hex');
 }
 
-const otpSchema = new Schema<IOtp, OtpModel, IOtpMethods>({
+const otpSchema = new Schema<OtpDocument, OtpModelStatics>({
     email: { type: String, required: true, lowercase: true, trim: true },
     purpose: { type: String, enum: [...OTP_PURPOSES], required: true },
     codeHash: { type: String, required: true },
@@ -68,7 +68,16 @@ const otpSchema = new Schema<IOtp, OtpModel, IOtpMethods>({
     attempts: { type: Number, default: 0 },
     lastSentAt: { type: Date, default: Date.now },
     expiresAt: { type: Date, required: true },
-}, { timestamps: true, collection: 'Otp' });
+}, {
+    timestamps: true,
+    collection: 'Otp',
+    toJSON: {
+        transform: (_doc, ret: Record<string, unknown>) => {
+            for (const field of PRIVATE_OTP_FIELDS) delete ret[field];
+            return ret;
+        },
+    },
+});
 
 // Đăng ký bắt buộc đủ thông tin tài khoản và thông tin đội tối thiểu
 otpSchema.pre('validate', function () {
@@ -103,6 +112,4 @@ otpSchema.method('matches', function (code: string): boolean {
     return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 });
 
-const Otp = mongoose.model<IOtp, OtpModel>('Otp', otpSchema);
-
-export default Otp;
+export const OtpModel = mongoose.model<OtpDocument, OtpModelStatics>('Otp', otpSchema);

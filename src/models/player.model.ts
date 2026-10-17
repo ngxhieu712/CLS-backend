@@ -4,7 +4,7 @@ export const PLAYER_STATUSES = ['starter', 'substitute'] as const;
 export type PlayerStatus = (typeof PLAYER_STATUSES)[number];
 
 // Bảng Tuyển_thủ
-export interface IPlayer {
+export interface PlayerDocument extends mongoose.Document {
     nickname: string;                  // Nickname
     fullName?: string;                 // Họ_tên (nội bộ)
     avatar: string;                    // Ảnh_đại_diện (URL)
@@ -16,7 +16,7 @@ export interface IPlayer {
     updatedAt?: Date;
 }
 
-const playerSchema = new Schema<IPlayer>({
+const playerSchema = new Schema<PlayerDocument>({
     nickname: { type: String, required: true, trim: true },
     fullName: { type: String, trim: true },
     avatar: { type: String, default: '' },
@@ -28,6 +28,4 @@ const playerSchema = new Schema<IPlayer>({
 
 playerSchema.index({ team: 1 });
 
-const Player = mongoose.model<IPlayer>('Player', playerSchema);
-
-export default Player;
+export const PlayerModel = mongoose.model<PlayerDocument>('Player', playerSchema);

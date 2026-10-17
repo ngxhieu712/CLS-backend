@@ -4,7 +4,7 @@ export const ROUND_TYPES = ['group', 'knockout'] as const;
 export type RoundType = (typeof ROUND_TYPES)[number];
 
 // Bảng Vòng_đấu
-export interface IRound {
+export interface RoundDocument extends mongoose.Document {
     name: string;                      // Tên_vòng
     type: RoundType;                   // Loại_vòng (vòng bảng / loại trực tiếp)
     order: number;                     // Thứ_tự_vòng
@@ -14,7 +14,7 @@ export interface IRound {
     updatedAt?: Date;
 }
 
-const roundSchema = new Schema<IRound>({
+const roundSchema = new Schema<RoundDocument>({
     name: { type: String, required: true, trim: true },
     type: { type: String, enum: [...ROUND_TYPES], required: true },
     order: { type: Number, required: true, min: 1 },
@@ -25,6 +25,4 @@ const roundSchema = new Schema<IRound>({
 // Thứ tự vòng không trùng trong cùng một giải
 roundSchema.index({ tournament: 1, order: 1 }, { unique: true });
 
-const Round = mongoose.model<IRound>('Round', roundSchema);
-
-export default Round;
+export const RoundModel = mongoose.model<RoundDocument>('Round', roundSchema);
