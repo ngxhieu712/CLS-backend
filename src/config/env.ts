@@ -17,6 +17,7 @@ const envSchema = z
     JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),
     JWT_EXPIRES_IN: z.string().default('1d'),
     OTP_SECRET: z.string().min(16).default('development-only-otp-secret-change-me'),
+    GOOGLE_CLIENT_ID: optionalString,
     COOKIE_SECURE: z.string().optional().transform((value) => value === 'true'),
     CLIENT_URL: z.string().default('http://localhost:5173'),
     // Number of reverse proxies in front of the app (Render, Railway, Nginx: usually 1).
@@ -66,6 +67,7 @@ export const parseEnv = (raw: RawEnv) => {
     jwtSecret: v.JWT_SECRET,
     jwtExpiresIn: v.JWT_EXPIRES_IN,
     otpSecret: v.OTP_SECRET,
+    googleClientId: v.GOOGLE_CLIENT_ID,
     cookieSecure: v.COOKIE_SECURE,
     clientUrl: v.CLIENT_URL,
     trustProxy: v.TRUST_PROXY,

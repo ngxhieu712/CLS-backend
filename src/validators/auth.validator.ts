@@ -47,7 +47,17 @@ export const resetPasswordSchema = otpSchema.extend({
   newPassword: z.string().min(8).max(128),
 });
 
+export const googleLoginSchema = z.object({
+  idToken: z.string().min(1),
+});
+
+export const googleRegistrationSchema = z.object({
+  registrationTicket: z.string().min(1),
+  team: teamSchema,
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ResubmitInput = z.infer<typeof resubmitSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type GoogleRegistrationInput = z.infer<typeof googleRegistrationSchema>;

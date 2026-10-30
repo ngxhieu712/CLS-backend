@@ -4,9 +4,12 @@ import { TeamModel } from "../models/team.model";
 import { UserModel } from "../models/user.model";
 import { forbidden, unauthorized } from "../utils/app-error";
 import { signToken } from "../utils/jwt";
+import { signGoogleRegistrationTicket } from '../utils/jwt';
+import { verifyGoogleIdToken } from '../services/google-auth.service';
 import * as userService from "../services/user.service";
 import type {
   LoginInput,
+  GoogleRegistrationInput,
   RegisterInput,
   ResetPasswordInput,
   ResubmitInput,
@@ -19,6 +22,11 @@ const cookieOptions = {
   maxAge: 24 * 60 * 60 * 1000,
   path: "/",
 };
+
+const signIn = (res: Response, user: { _id: unknown; email: string; fullName: string; role: string; status: string }) =>
+  res.cookie('auth_token', signToken({ sub: String(user._id), email: user.email }), cookieOptions).json({
+    user: { _id: user._id, fullName: user.fullName, email: user.email, role: user.role, status: user.status },
+  });
 
 export const register = async (req: Request, res: Response) => {
   await userService.beginTeamRegistration(req.body as RegisterInput);
@@ -46,21 +54,24 @@ export const login = async (req: Request, res: Response) => {
   if (!user || !(await user.comparePassword(password)))
     throw unauthorized("Invalid email or password");
   if (user.status === "locked") throw forbidden("This account is locked");
-  res
-    .cookie(
-      "auth_token",
-      signToken({ sub: String(user._id), email: user.email }),
-      cookieOptions,
-    )
-    .json({
-      user: {
-        _id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        role: user.role,
-        status: user.status,
-      },
-    });
+  signIn(res, user);
+};
+
+export const googleLogin = async (req: Request, res: Response) => {
+  const identity = await verifyGoogleIdToken((req.body as { idToken: string }).idToken);
+  const result = await userService.continueWithGoogle(identity);
+  if ('user' in result && result.user) return signIn(res, result.user);
+  return res.json({
+    needsRegistration: true,
+    email: result.email,
+    fullName: result.fullName,
+    registrationTicket: signGoogleRegistrationTicket(result),
+  });
+};
+
+export const completeGoogleRegistration = async (req: Request, res: Response) => {
+  await userService.completeGoogleTeamRegistration(req.body as GoogleRegistrationInput);
+  res.status(201).json({ message: 'Team profile submitted for approval' });
 };
 
 export const logout = (_req: Request, res: Response) =>

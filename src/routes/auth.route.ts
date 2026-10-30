@@ -7,7 +7,9 @@ import {
   resetPassword,
   resubmitProfile,
   verifyRegisterOtp,
-  logout
+  logout,
+  googleLogin,
+  completeGoogleRegistration
 } from '../controllers/auth.controller';
 import { authGuard } from '../middlewares/auth.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
@@ -17,7 +19,9 @@ import {
   otpSchema,
   registerSchema,
   resetPasswordSchema,
-  resubmitSchema
+  resubmitSchema,
+  googleLoginSchema,
+  googleRegistrationSchema
 } from '../validators/auth.validator';
 
 export const authRouter = Router();
@@ -26,6 +30,8 @@ authRouter.post('/register', validateBody(registerSchema), register);
 authRouter.post('/register/verify-otp', validateBody(otpSchema), verifyRegisterOtp);
 authRouter.patch('/resubmit', authGuard, validateBody(resubmitSchema), resubmitProfile);
 authRouter.post('/login', validateBody(loginSchema), login);
+authRouter.post('/google', validateBody(googleLoginSchema), googleLogin);
+authRouter.post('/google/register', validateBody(googleRegistrationSchema), completeGoogleRegistration);
 authRouter.post('/forgot-password', validateBody(forgotPasswordSchema), forgotPassword);
 authRouter.post('/reset-password', validateBody(resetPasswordSchema), resetPassword);
 authRouter.get('/me', authGuard, getMe);

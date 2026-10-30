@@ -88,3 +88,12 @@ export const sendResetTokenEmail = async (to: string, token: string) => {
     `<p>Your reset token is <b>${token}</b>. It expires in ${env.resetTokenExpiresMinutes} minutes.</p>`
   );
 };
+
+export const sendTeamReviewEmail = (to: string, approved: boolean, reason?: string) =>
+  sendEmail(
+    to,
+    approved ? 'Team profile approved' : 'Team profile needs changes',
+    approved
+      ? '<p>Your team profile has been approved. You can now take part in the tournament.</p>'
+      : `<p>Your team profile was not approved.${reason ? ` Reason: ${reason}` : ''}</p>`,
+  );
