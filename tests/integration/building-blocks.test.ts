@@ -6,16 +6,16 @@ import { requireRole } from '../../src/middlewares/role.middleware';
 import { UserModel } from '../../src/models/user.model';
 import { paginate } from '../../src/utils/pagination';
 import { serve } from '../helpers/api';
-import { bearerFor, createUser } from '../helpers/user-factory';
+import { authCookieFor, createUser } from '../helpers/user-factory';
 
 describe('paginate', () => {
   it('returns one page of items with totals, sorted', async () => {
-    for (let i = 1; i <= 5; i += 1) await createUser({ email: `u${i}@example.com`, displayName: `User ${i}` });
+    for (let i = 1; i <= 5; i += 1) await createUser({ email: `u${i}@example.com`, fullName: `User ${i}` });
 
-    const page = await paginate(UserModel, {}, { page: 2, limit: 2, sort: 'displayName' });
+    const page = await paginate(UserModel, {}, { page: 2, limit: 2, sort: 'fullName' });
 
     expect(page).toMatchObject({ page: 2, limit: 2, total: 5, totalPages: 3 });
-    expect(page.items.map((user) => user.displayName)).toEqual(['User 3', 'User 4']);
+    expect(page.items.map((user) => user.fullName)).toEqual(['User 3', 'User 4']);
   });
 
   it('accepts _id as the sort field', async () => {
@@ -45,22 +45,22 @@ describe('requireRole', () => {
 
   it('lets an admin through', async () => {
     const admin = await createUser({ email: 'admin@example.com', role: 'admin' });
-    const response = await client().get('/admin').set('Authorization', bearerFor(admin));
+    const response = await client().get('/admin').set('Cookie', authCookieFor(admin));
     expect(response.status).toBe(200);
     expect(response.body.role).toBe('admin');
   });
 
   it('answers 403 for a regular user', async () => {
     const user = await createUser({ email: 'user@example.com' });
-    const response = await client().get('/admin').set('Authorization', bearerFor(user));
+    const response = await client().get('/admin').set('Cookie', authCookieFor(user));
     expect(response.status).toBe(403);
   });
 
   it('answers 401 for a deleted user', async () => {
     const user = await createUser({ email: 'gone@example.com', role: 'admin' });
-    const authorization = bearerFor(user);
+    const cookie = authCookieFor(user);
     await UserModel.deleteOne({ _id: user._id });
-    const response = await client().get('/admin').set('Authorization', authorization);
+    const response = await client().get('/admin').set('Cookie', cookie);
     expect(response.status).toBe(401);
   });
 });

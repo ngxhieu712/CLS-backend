@@ -1,168 +1,53 @@
 import { describe, expect, it } from 'vitest';
-import { api } from '../helpers/api';
 import { UserModel } from '../../src/models/user.model';
-import { verifyToken } from '../../src/utils/jwt';
-import { emailOutbox, lastEmailTo } from '../helpers/email-outbox';
-import { DEFAULT_PASSWORD, bearerFor, createUser, readSecrets } from '../helpers/user-factory';
+import { api } from '../helpers/api';
+import { authCookieFor, createUser, DEFAULT_PASSWORD } from '../helpers/user-factory';
 
 const email = 'user@example.com';
 const credentials = { email, password: DEFAULT_PASSWORD };
 
-// The login OTP step is opt-in per user; these tests cover the opted-in flow.
-const createOtpUser = (overrides: Parameters<typeof createUser>[0] = {}) =>
-  createUser({ ...overrides, loginOtpEnabled: true });
-
-describe('POST /api/auth/login (step 1)', () => {
-  it('answers 202 with requiresOtp and emails a fresh OTP', async () => {
-    await createOtpUser({ email });
-
+describe('POST /api/auth/login', () => {
+  it('sets an httpOnly auth cookie and returns public account data', async () => {
+    await createUser({ email, fullName: 'Alice' });
     const response = await api().post('/api/auth/login').send(credentials);
-
-    expect(response.status).toBe(202);
-    expect(response.body).toMatchObject({ requiresOtp: true, email });
-    const { otpCode } = await readSecrets(email);
-    expect(otpCode).toMatch(/^\d{6}$/);
-    expect(lastEmailTo(email)?.html).toContain(otpCode as string);
-  });
-
-  it('never returns a token at step 1', async () => {
-    await createOtpUser({ email });
-    const response = await api().post('/api/auth/login').send(credentials);
-    expect(response.body).not.toHaveProperty('token');
-  });
-
-  it('rejects a wrong password with 401 and sends no email', async () => {
-    await createOtpUser({ email });
-
-    const response = await api().post('/api/auth/login').send({ email, password: 'wrong-password' });
-
-    expect(response.status).toBe(401);
-    expect(response.body.message).toBe('Invalid email or password');
-    expect(emailOutbox).toHaveLength(0);
-  });
-
-  it('returns the same 401 message for an unknown email (no user enumeration)', async () => {
-    const response = await api()
-      .post('/api/auth/login')
-      .send({ email: 'ghost@example.com', password: DEFAULT_PASSWORD });
-
-    expect(response.status).toBe(401);
-    expect(response.body.message).toBe('Invalid email or password');
-  });
-
-  it('blocks a user whose email is not verified with 403', async () => {
-    await createOtpUser({ email, isEmailVerified: false });
-
-    const response = await api().post('/api/auth/login').send(credentials);
-
-    expect(response.status).toBe(403);
-    expect(emailOutbox).toHaveLength(0);
-  });
-
-  it('replaces a previously issued OTP when login is retried', async () => {
-    await createOtpUser({ email });
-    await api().post('/api/auth/login').send(credentials);
-    const first = await readSecrets(email);
-
-    await api().post('/api/auth/login').send(credentials);
-    const second = await readSecrets(email);
-
-    expect(second.otpExpiresAt!.getTime()).toBeGreaterThanOrEqual(first.otpExpiresAt!.getTime());
-    expect(emailOutbox).toHaveLength(2);
-  });
-});
-
-describe('POST /api/auth/login/verify-otp (step 2)', () => {
-  const loginAndReadOtp = async () => {
-    await api().post('/api/auth/login').send(credentials);
-    const { otpCode } = await readSecrets(email);
-    return otpCode as string;
-  };
-
-  it('returns a usable JWT and clears the OTP', async () => {
-    await createOtpUser({ email });
-    const otp = await loginAndReadOtp();
-
-    const response = await api().post('/api/auth/login/verify-otp').send({ email, otp });
 
     expect(response.status).toBe(200);
-    expect(verifyToken(response.body.token).email).toBe(email);
-    const user = await UserModel.findOne({ email });
-    expect(user?.otpCode).toBeUndefined();
+    expect(response.headers['set-cookie']?.[0]).toContain('auth_token=');
+    expect(response.headers['set-cookie']?.[0]).toContain('HttpOnly');
+    expect(response.body).toEqual({ user: expect.objectContaining({ email, fullName: 'Alice', role: 'teamManager', status: 'active' }) });
+    expect(JSON.stringify(response.body)).not.toContain(DEFAULT_PASSWORD);
   });
 
-  it('cannot exchange the same OTP for a second token', async () => {
-    await createOtpUser({ email });
-    const otp = await loginAndReadOtp();
-    await api().post('/api/auth/login/verify-otp').send({ email, otp });
-
-    const replay = await api().post('/api/auth/login/verify-otp').send({ email, otp });
-
-    expect(replay.status).toBe(400);
-    expect(replay.body).not.toHaveProperty('token');
-  });
-
-  it('rejects an expired OTP', async () => {
-    await createOtpUser({ email });
-    const otp = await loginAndReadOtp();
-    await UserModel.updateOne({ email }, { otpExpiresAt: new Date(Date.now() - 1000) });
-
-    const response = await api().post('/api/auth/login/verify-otp').send({ email, otp });
-
-    expect(response.status).toBe(400);
-  });
-
-  it("rejects another user's OTP", async () => {
-    await createOtpUser({ email });
-    await createOtpUser({ email: 'other@example.com' });
-    const otp = await loginAndReadOtp();
-
-    const response = await api()
-      .post('/api/auth/login/verify-otp')
-      .send({ email: 'other@example.com', otp });
-
-    expect(response.status).toBe(400);
+  it('rejects invalid credentials and locked accounts', async () => {
+    expect((await api().post('/api/auth/login').send(credentials)).status).toBe(401);
+    await createUser({ email, status: 'locked' });
+    expect((await api().post('/api/auth/login').send(credentials)).status).toBe(403);
   });
 });
 
 describe('GET /api/auth/me', () => {
-  it('returns the current user without any secret field', async () => {
-    const user = await createOtpUser({ email, displayName: 'Alice' });
-
-    const response = await api().get('/api/auth/me').set('Authorization', bearerFor(user));
+  it('reads the signed-in account from the auth cookie without private fields', async () => {
+    const user = await createUser({ email, fullName: 'Alice' });
+    const response = await api().get('/api/auth/me').set('Cookie', authCookieFor(user));
 
     expect(response.status).toBe(200);
-    expect(response.body.email).toBe(email);
-    expect(response.body.displayName).toBe('Alice');
-    for (const secret of ['password', 'otpCode', 'resetToken']) {
-      expect(response.body).not.toHaveProperty(secret);
-    }
+    expect(response.body).toMatchObject({ email, fullName: 'Alice', status: 'active' });
+    expect(response.body).not.toHaveProperty('password');
   });
 
-  it('hides OTP and reset expiry timestamps while a code is pending', async () => {
-    const user = await createOtpUser({ email });
-    await api().post('/api/auth/login').send({ email, password: DEFAULT_PASSWORD });
-    await api().post('/api/auth/forgot-password').send({ email });
-
-    const response = await api().get('/api/auth/me').set('Authorization', bearerFor(user));
-
-    for (const field of ['password', 'otpCode', 'otpExpiresAt', 'resetToken', 'resetTokenExpiresAt', '__v']) {
-      expect(response.body).not.toHaveProperty(field);
-    }
-  });
-
-  it('requires a token', async () => {
-    const response = await api().get('/api/auth/me');
-    expect(response.status).toBe(401);
-  });
-
-  it('returns 404 when the token points at a deleted user', async () => {
-    const user = await createOtpUser({ email });
-    const authorization = bearerFor(user);
+  it('rejects requests with no cookie or a deleted account', async () => {
+    expect((await api().get('/api/auth/me')).status).toBe(401);
+    const user = await createUser({ email });
     await UserModel.deleteOne({ _id: user._id });
+    expect((await api().get('/api/auth/me').set('Cookie', authCookieFor(user))).status).toBe(401);
+  });
+});
 
-    const response = await api().get('/api/auth/me').set('Authorization', authorization);
-
-    expect(response.status).toBe(404);
+describe('POST /api/auth/logout', () => {
+  it('clears the auth cookie', async () => {
+    const user = await createUser({ email });
+    const response = await api().post('/api/auth/logout').set('Cookie', authCookieFor(user));
+    expect(response.status).toBe(204);
+    expect(response.headers['set-cookie']?.[0]).toContain('auth_token=;');
   });
 });

@@ -19,15 +19,18 @@ const cookieOptions = {
   maxAge: 24 * 60 * 60 * 1000,
   path: "/",
 };
+
 export const register = async (req: Request, res: Response) => {
   await userService.beginTeamRegistration(req.body as RegisterInput);
   res.status(201).json({ message: "OTP has been sent to your email" });
 };
+
 export const verifyRegisterOtp = async (req: Request, res: Response) => {
   const { email, otp } = req.body as { email: string; otp: string };
   await userService.completeTeamRegistration(email, otp);
   res.status(201).json({ message: "Team profile submitted for approval" });
 };
+
 export const resubmitProfile = async (req: Request, res: Response) =>
   res.json(
     await userService.resubmitTeamProfile(
@@ -35,9 +38,11 @@ export const resubmitProfile = async (req: Request, res: Response) =>
       req.body as ResubmitInput,
     ),
   );
+
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body as LoginInput;
   const user = await UserModel.findOne({ email }).select("+password");
+
   if (!user || !(await user.comparePassword(password)))
     throw unauthorized("Invalid email or password");
   if (user.status === "locked") throw forbidden("This account is locked");
@@ -57,6 +62,7 @@ export const login = async (req: Request, res: Response) => {
       },
     });
 };
+
 export const logout = (_req: Request, res: Response) =>
   res
     .clearCookie("auth_token", {
@@ -67,15 +73,18 @@ export const logout = (_req: Request, res: Response) =>
     })
     .status(204)
     .end();
+
 export const forgotPassword = async (req: Request, res: Response) => {
   await userService.beginPasswordReset((req.body as { email: string }).email);
   res.json({ message: "If the email exists, an OTP has been sent" });
 };
+
 export const resetPassword = async (req: Request, res: Response) => {
   const { email, otp, newPassword } = req.body as ResetPasswordInput;
   await userService.resetPasswordWithOtp(email, otp, newPassword);
   res.json({ message: "Password reset successful" });
 };
+
 export const getMe = async (req: Request, res: Response) => {
   const user = await UserModel.findById(req.user!.sub);
   if (!user) throw unauthorized();

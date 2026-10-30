@@ -1,4 +1,5 @@
 import { PlayerModel } from "../models/player.model";
+import "../models/group.model";
 import { TeamModel } from "../models/team.model";
 import { UserModel } from "../models/user.model";
 import { conflict, notFound } from "../utils/app-error";

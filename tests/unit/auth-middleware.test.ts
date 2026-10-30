@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { authGuard } from '../../src/middlewares/auth.middleware';
 import { signToken } from '../../src/utils/jwt';
 
-const buildContext = (authorization?: string) => {
-  const req = { headers: authorization ? { authorization } : {} } as unknown as Request;
+const buildContext = (cookie?: string) => {
+  const req = { headers: cookie ? { cookie } : {} } as unknown as Request;
   const res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
   const next = vi.fn() as unknown as NextFunction;
   return { req, res, next };
@@ -18,9 +18,9 @@ const expectUnauthorized = (res: Response, next: NextFunction) => {
 };
 
 describe('authGuard', () => {
-  it('passes a valid Bearer token through and exposes the payload', () => {
+  it('passes a valid auth_token cookie through and exposes the payload', () => {
     const token = signToken({ sub: 'user-id', email: 'user@example.com' });
-    const { req, res, next } = buildContext(`Bearer ${token}`);
+    const { req, res, next } = buildContext(`auth_token=${encodeURIComponent(token)}`);
 
     authGuard(req, res, next);
 
@@ -28,16 +28,16 @@ describe('authGuard', () => {
     expect(req.user).toMatchObject({ sub: 'user-id', email: 'user@example.com' });
   });
 
-  it('rejects a request with no Authorization header', () => {
+  it('rejects a request with no auth cookie', () => {
     const { req, res, next } = buildContext();
     authGuard(req, res, next);
     expectUnauthorized(res, next);
   });
 
-  it.each(['Basic abc', 'bearer lowercase-scheme', 'Bearer', 'abc.def.ghi'])(
-    'rejects malformed header %j',
-    (header) => {
-      const { req, res, next } = buildContext(header);
+  it.each(['session=abc', 'auth_token=not-a-jwt', 'auth_token=abc.def.ghi'])(
+    'rejects malformed cookie %j',
+    (cookie) => {
+      const { req, res, next } = buildContext(cookie);
       authGuard(req, res, next);
       expectUnauthorized(res, next);
     }
@@ -47,7 +47,7 @@ describe('authGuard', () => {
     const expired = jwt.sign({ sub: 'user-id', email: 'user@example.com' }, process.env.JWT_SECRET as string, {
       expiresIn: '-1s'
     });
-    const { req, res, next } = buildContext(`Bearer ${expired}`);
+    const { req, res, next } = buildContext(`auth_token=${expired}`);
 
     authGuard(req, res, next);
 
@@ -56,7 +56,7 @@ describe('authGuard', () => {
 
   it('rejects a token signed with a foreign secret', () => {
     const foreign = jwt.sign({ sub: 'user-id', email: 'user@example.com' }, 'foreign_secret');
-    const { req, res, next } = buildContext(`Bearer ${foreign}`);
+    const { req, res, next } = buildContext(`auth_token=${foreign}`);
 
     authGuard(req, res, next);
 

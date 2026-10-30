@@ -18,3 +18,10 @@ export const clearEmailOutbox = () => {
 
 export const lastEmailTo = (to: string) =>
   [...emailOutbox].reverse().find((mail) => mail.to === to);
+
+/** Returns the six-digit OTP rendered in a test email. */
+export const otpFromLastEmail = (to: string) => {
+  const match = lastEmailTo(to)?.html?.match(/\b\d{6}\b/);
+  if (!match) throw new Error(`No OTP email found for ${to}`);
+  return match[0];
+};

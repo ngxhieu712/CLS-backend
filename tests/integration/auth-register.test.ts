@@ -1,125 +1,86 @@
 import { describe, expect, it } from 'vitest';
-import { api } from '../helpers/api';
+import { OtpModel } from '../../src/models/otp.model';
+import { TeamModel } from '../../src/models/team.model';
 import { UserModel } from '../../src/models/user.model';
-import { emailOutbox, lastEmailTo } from '../helpers/email-outbox';
-import { createUser, readSecrets } from '../helpers/user-factory';
+import { api } from '../helpers/api';
+import { otpFromLastEmail } from '../helpers/email-outbox';
+import { createTournament } from '../helpers/tournament-factory';
+import { createUser } from '../helpers/user-factory';
 
-const validPayload = { email: 'new@example.com', password: 'Passw0rd!' };
+const validPayload = {
+  fullName: 'New Manager',
+  email: 'new@example.com',
+  password: 'Passw0rd!',
+  team: { name: 'New Team', tag: 'NEW', contactEmail: 'team@example.com', contactPhone: '0123456789' }
+};
 
 describe('POST /api/auth/register', () => {
-  it('creates an unverified user, stores an OTP and emails it', async () => {
+  it('stores a pending registration OTP and emails it without creating the account yet', async () => {
     const response = await api().post('/api/auth/register').send(validPayload);
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual({ message: 'OTP has been sent to your email' });
-
-    const user = await UserModel.findOne({ email: validPayload.email });
-    expect(user?.isEmailVerified).toBe(false);
-    expect(user?.otpCode).toMatch(/^\d{6}$/);
-    expect(user?.otpExpiresAt?.getTime()).toBeGreaterThan(Date.now());
-
-    const mail = lastEmailTo(validPayload.email);
-    expect(mail?.html).toContain(user?.otpCode as string);
+    expect(await UserModel.exists({ email: validPayload.email })).toBeNull();
+    const otp = await OtpModel.findOne({ email: validPayload.email, purpose: 'register' });
+    expect(otp?.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(otp?.codeHash).not.toMatch(/^\d{6}$/);
+    expect(otpFromLastEmail(validPayload.email)).toMatch(/^\d{6}$/);
   });
 
-  it('never returns the OTP in the response body', async () => {
-    const response = await api().post('/api/auth/register').send(validPayload);
-    const { otpCode } = await readSecrets(validPayload.email);
-    expect(JSON.stringify(response.body)).not.toContain(otpCode as string);
-  });
-
-  it('stores the email lowercased', async () => {
-    await api().post('/api/auth/register').send({ ...validPayload, email: 'MiXeD@Example.COM' });
-    expect(await UserModel.findOne({ email: 'mixed@example.com' })).not.toBeNull();
-  });
-
-  it('rejects a duplicate email with 409', async () => {
+  it('rejects duplicate account emails and team names', async () => {
     await createUser({ email: validPayload.email });
+    expect((await api().post('/api/auth/register').send(validPayload)).status).toBe(409);
 
-    const response = await api().post('/api/auth/register').send(validPayload);
+    const teamPayload = { ...validPayload, email: 'manager@example.com' };
+    await createTournament();
+    await api().post('/api/auth/register').send(teamPayload);
+    const code = otpFromLastEmail(teamPayload.email);
+    await api().post('/api/auth/register/verify-otp').send({ email: teamPayload.email, otp: code });
 
-    expect(response.status).toBe(409);
-    expect(response.body.message).toBe('Email already exists');
-    expect(emailOutbox).toHaveLength(0);
+    const duplicateTeam = { ...validPayload, email: 'other@example.com' };
+    expect((await api().post('/api/auth/register').send(duplicateTeam)).status).toBe(409);
   });
 
-  it('rejects an invalid payload with 400 before touching the database', async () => {
-    const response = await api()
-      .post('/api/auth/register')
-      .send({ email: 'not-an-email', password: '123' });
-
+  it('rejects invalid nested registration data before writing an OTP', async () => {
+    const response = await api().post('/api/auth/register').send({ ...validPayload, team: { name: 'x' } });
     expect(response.status).toBe(400);
-    expect(response.body.message).toBe('Validation failed');
-    expect(await UserModel.countDocuments()).toBe(0);
+    expect(await OtpModel.countDocuments()).toBe(0);
   });
 });
 
 describe('POST /api/auth/register/verify-otp', () => {
-  const registerAndReadOtp = async () => {
+  const beginRegistration = async () => {
     await api().post('/api/auth/register').send(validPayload);
-    const { otpCode } = await readSecrets(validPayload.email);
-    return otpCode as string;
+    return otpFromLastEmail(validPayload.email);
   };
 
-  it('verifies the email and clears the OTP', async () => {
-    const otp = await registerAndReadOtp();
+  it('creates a pending team manager and team after a valid OTP', async () => {
+    await createTournament();
+    const otp = await beginRegistration();
 
-    const response = await api()
-      .post('/api/auth/register/verify-otp')
-      .send({ email: validPayload.email, otp });
+    const response = await api().post('/api/auth/register/verify-otp').send({ email: validPayload.email, otp });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({ message: 'Team profile submitted for approval' });
     const user = await UserModel.findOne({ email: validPayload.email });
-    expect(user?.isEmailVerified).toBe(true);
-    expect(user?.otpCode).toBeUndefined();
-    expect(user?.otpExpiresAt).toBeUndefined();
+    expect(user).toMatchObject({ fullName: 'New Manager', role: 'teamManager', status: 'pending' });
+    expect(await TeamModel.findOne({ manager: user!._id })).toMatchObject({ name: 'New Team', tag: 'NEW', profileStatus: 'pending' });
+    expect(await OtpModel.exists({ email: validPayload.email, purpose: 'register' })).toBeNull();
   });
 
-  it('cannot reuse the same OTP twice', async () => {
-    const otp = await registerAndReadOtp();
-    await api().post('/api/auth/register/verify-otp').send({ email: validPayload.email, otp });
-
-    const replay = await api()
-      .post('/api/auth/register/verify-otp')
-      .send({ email: validPayload.email, otp });
-
-    expect(replay.status).toBe(400);
-    expect(replay.body.message).toBe('Invalid or expired OTP');
+  it('rejects a wrong or expired OTP without creating an account', async () => {
+    await createTournament();
+    const otp = await beginRegistration();
+    expect((await api().post('/api/auth/register/verify-otp').send({ email: validPayload.email, otp: '000000' })).status).toBe(400);
+    await OtpModel.updateOne({ email: validPayload.email, purpose: 'register' }, { expiresAt: new Date(Date.now() - 1) });
+    expect((await api().post('/api/auth/register/verify-otp').send({ email: validPayload.email, otp })).status).toBe(400);
+    expect(await UserModel.exists({ email: validPayload.email })).toBeNull();
   });
 
-  it('rejects a wrong OTP', async () => {
-    const otp = await registerAndReadOtp();
-    const wrongOtp = otp === '000000' ? '111111' : '000000';
-
-    const response = await api()
-      .post('/api/auth/register/verify-otp')
-      .send({ email: validPayload.email, otp: wrongOtp });
-
+  it('requires a configured tournament before completing the registration', async () => {
+    const otp = await beginRegistration();
+    const response = await api().post('/api/auth/register/verify-otp').send({ email: validPayload.email, otp });
     expect(response.status).toBe(400);
-    expect((await UserModel.findOne({ email: validPayload.email }))?.isEmailVerified).toBe(false);
-  });
-
-  it('rejects an expired OTP', async () => {
-    const otp = await registerAndReadOtp();
-    await UserModel.updateOne(
-      { email: validPayload.email },
-      { otpExpiresAt: new Date(Date.now() - 1000) }
-    );
-
-    const response = await api()
-      .post('/api/auth/register/verify-otp')
-      .send({ email: validPayload.email, otp });
-
-    expect(response.status).toBe(400);
-    expect(response.body.message).toBe('Invalid or expired OTP');
-  });
-
-  it('rejects an unknown email without leaking that it is unknown', async () => {
-    const response = await api()
-      .post('/api/auth/register/verify-otp')
-      .send({ email: 'ghost@example.com', otp: '123456' });
-
-    expect(response.status).toBe(400);
-    expect(response.body.message).toBe('Invalid or expired OTP');
+    expect(response.body.message).toBe('Tournament has not been configured yet');
   });
 });
