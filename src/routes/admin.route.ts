@@ -1,11 +1,17 @@
 import { Router } from 'express';
-import { listPendingTeams, reviewTeam } from '../controllers/team.controller';
+import { listAdminTeams, listPendingTeams, reviewTeam } from '../controllers/team.controller';
+import { changeAccountStatus, createAdminAccount, listAccounts } from '../controllers/admin.controller';
 import { authGuard } from '../middlewares/auth.middleware';
 import { requireRole } from '../middlewares/role.middleware';
 import { validate, validateBody } from '../middlewares/validate.middleware';
 import { idParamsSchema } from '../validators/common.validator';
 import { reviewTeamSchema } from '../validators/team.validator';
+import { adminTeamQuerySchema, createAdminAccountSchema, updateAccountStatusSchema } from '../validators/admin.validator';
 export const adminRouter = Router();
 adminRouter.use(authGuard, requireRole('admin'));
 adminRouter.get('/teams/pending', listPendingTeams);
+adminRouter.get('/teams', validate({ query: adminTeamQuerySchema }), listAdminTeams);
 adminRouter.patch('/teams/:id/review', validate({ params: idParamsSchema }), validateBody(reviewTeamSchema), reviewTeam);
+adminRouter.get('/accounts', listAccounts);
+adminRouter.post('/accounts', validateBody(createAdminAccountSchema), createAdminAccount);
+adminRouter.patch('/accounts/:id/status', validate({ params: idParamsSchema }), validateBody(updateAccountStatusSchema), changeAccountStatus);

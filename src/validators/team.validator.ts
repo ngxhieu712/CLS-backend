@@ -11,7 +11,9 @@ export const updateTeamSchema = z.object({
   contactPhone: z.string().trim().min(7).max(20).optional()
 }).refine((value) => Object.keys(value).length > 0, 'Send at least one team field');
 export const playerSchema = z.object({ nickname: z.string().trim().min(1).max(50), fullName: z.string().trim().max(100).optional(), avatar: z.string().url().optional(), position: z.string().trim().max(50).optional(), inGameId: z.string().trim().max(100).optional(), status: z.enum(PLAYER_STATUSES).default('starter') });
-export const reviewTeamSchema = z.object({ action: z.enum(['approve', 'reject']), reason: z.string().trim().max(500).optional() }).superRefine((value, ctx) => { if (value.action === 'reject' && !value.reason) ctx.addIssue({ code: 'custom', path: ['reason'], message: 'Reason is required when rejecting' }); });
+export const updatePlayerSchema = playerSchema.partial().refine((value) => Object.keys(value).length > 0, 'Send at least one player field');
+export const reviewTeamSchema = z.object({ action: z.enum(['approve', 'reject']), reason: z.string().trim().max(500).optional() });
 export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;
 export type PlayerInput = z.infer<typeof playerSchema>;
+export type UpdatePlayerInput = z.infer<typeof updatePlayerSchema>;
 export type ReviewTeamInput = z.infer<typeof reviewTeamSchema>;

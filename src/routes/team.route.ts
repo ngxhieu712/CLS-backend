@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { addMyPlayer, getMyTeam, listMyPlayers, removeMyPlayer, updateMyTeam } from '../controllers/team.controller';
+import { addMyPlayer, getMyTeam, listMyPlayers, removeMyPlayer, updateMyPlayer, updateMyTeam } from '../controllers/team.controller';
 import { authGuard } from '../middlewares/auth.middleware';
 import { requireRole } from '../middlewares/role.middleware';
 import { validate, validateBody } from '../middlewares/validate.middleware';
 import { idParamsSchema } from '../validators/common.validator';
-import { playerSchema, updateTeamSchema } from '../validators/team.validator';
+import { playerSchema, updatePlayerSchema, updateTeamSchema } from '../validators/team.validator';
 export const teamRouter = Router();
 teamRouter.use(authGuard, requireRole('teamManager'));
 teamRouter.get('/me', getMyTeam); teamRouter.patch('/me', validateBody(updateTeamSchema), updateMyTeam);
-teamRouter.get('/me/players', listMyPlayers); teamRouter.post('/me/players', validateBody(playerSchema), addMyPlayer); teamRouter.delete('/me/players/:id', validate({ params: idParamsSchema }), removeMyPlayer);
+teamRouter.get('/me/players', listMyPlayers); teamRouter.post('/me/players', validateBody(playerSchema), addMyPlayer); teamRouter.patch('/me/players/:id', validate({ params: idParamsSchema }), validateBody(updatePlayerSchema), updateMyPlayer); teamRouter.delete('/me/players/:id', validate({ params: idParamsSchema }), removeMyPlayer);
