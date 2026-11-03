@@ -7,6 +7,7 @@ interface RequestSchemas {
   params?: ZodType;
 }
 
+// hàm chuyển ZodError sang kiểu lỗi dễ đọc hơn
 const toFieldErrors = (error: ZodError) =>
   error.issues.map((issue) => ({ field: issue.path.join('.'), message: issue.message }));
 
