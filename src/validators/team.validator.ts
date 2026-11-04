@@ -12,7 +12,22 @@ export const updateTeamSchema = z.object({
 }).refine((value) => Object.keys(value).length > 0, 'Send at least one team field');
 export const playerSchema = z.object({ nickname: z.string().trim().min(1).max(50), fullName: z.string().trim().max(100).optional(), avatar: z.string().url().optional(), position: z.string().trim().max(50).optional(), inGameId: z.string().trim().max(100).optional(), status: z.enum(PLAYER_STATUSES).default('starter') });
 export const updatePlayerSchema = playerSchema.partial().refine((value) => Object.keys(value).length > 0, 'Send at least one player field');
-export const reviewTeamSchema = z.object({ action: z.enum(['approve', 'reject']), reason: z.string().trim().max(500).optional() });
+export const reviewTeamSchema = z.object({ 
+  action: z.enum(['approve', 'reject']), 
+  reason: z.string().trim().max(500).optional() 
+}).refine(
+  (data) => {
+    // When rejecting a team, reason is required and must not be empty
+    if (data.action === 'reject') {
+      return data.reason !== undefined && data.reason.length > 0;
+    }
+    return true; // Approve doesn't require a reason
+  },
+  {
+    message: 'Rejection reason is required when rejecting a team',
+    path: ['reason']
+  }
+);
 export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;
 export type PlayerInput = z.infer<typeof playerSchema>;
 export type UpdatePlayerInput = z.infer<typeof updatePlayerSchema>;

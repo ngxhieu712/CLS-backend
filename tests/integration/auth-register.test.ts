@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { OtpModel } from '../../src/models/otp.model';
 import { TeamModel } from '../../src/models/team.model';
+import { TournamentModel } from '../../src/models/tournament.model';
 import { UserModel } from '../../src/models/user.model';
 import { api } from '../helpers/api';
 import { otpFromLastEmail } from '../helpers/email-outbox';
@@ -16,6 +17,7 @@ const validPayload = {
 
 describe('POST /api/auth/register', () => {
   it('stores a pending registration OTP and emails it without creating the account yet', async () => {
+    await createTournament(); // Need tournament for registration
     const response = await api().post('/api/auth/register').send(validPayload);
 
     expect(response.status).toBe(201);
@@ -28,11 +30,11 @@ describe('POST /api/auth/register', () => {
   });
 
   it('rejects duplicate account emails and team names', async () => {
+    await createTournament(); // Need tournament for registration to work
     await createUser({ email: validPayload.email });
     expect((await api().post('/api/auth/register').send(validPayload)).status).toBe(409);
 
     const teamPayload = { ...validPayload, email: 'manager@example.com' };
-    await createTournament();
     await api().post('/api/auth/register').send(teamPayload);
     const code = otpFromLastEmail(teamPayload.email);
     await api().post('/api/auth/register/verify-otp').send({ email: teamPayload.email, otp: code });
@@ -78,9 +80,13 @@ describe('POST /api/auth/register/verify-otp', () => {
   });
 
   it('requires a configured tournament before completing the registration', async () => {
+    // Create tournament to allow registration, then delete it to test the verify-otp error
+    const tournament = await createTournament();
     const otp = await beginRegistration();
+    await TournamentModel.findByIdAndDelete(tournament._id); // Remove tournament after registration
+    
     const response = await api().post('/api/auth/register/verify-otp').send({ email: validPayload.email, otp });
     expect(response.status).toBe(400);
-    expect(response.body.message).toBe('Tournament has not been configured yet');
+    expect(response.body.message).toBe('Tournament registration is closed');
   });
 });
